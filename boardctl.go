@@ -322,15 +322,6 @@ func main() {
 
     		if (res.CPUTemp < 40) {
     			writeCommand(pinFAN, 0)
-    		} else
-    		if (res.CPUTemp < 45) {
-    			writeCommand(pinFAN, 0.5)
-    		} else
-    		if (res.CPUTemp < 50) {
-    			writeCommand(pinFAN, 0.6)
-    		} else
-    		if (res.CPUTemp < 55) {
-    			writeCommand(pinFAN, 0.75)
     		} else {
     			writeCommand(pinFAN, 1)
     		}
