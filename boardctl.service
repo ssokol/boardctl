@@ -1,0 +1,13 @@
+[Unit]
+Description=AHRS Board Control
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/boardctl
+KillMode=process
+Restart=always
+RestartSec=5
+LimitCORE=1073741824
+
+[Install]
+WantedBy=multi-user.target
