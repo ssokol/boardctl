@@ -46,12 +46,22 @@ Congrats. You should now have blinkenlights and buzzinfan.
 What the lights mean:
 
 Green = power (takes about 20 seconds after power-on for this one to light up)
+
 Orange = GPS status
   * off = disconnected
   * blink = no lock
   * solid = lock
+
 Blue = ADS-B status
   * off = no signals (either band)
   * blink = receiving on one band (usually 1090)
   * solid = receiving on both bands
+  
+For building a Stratux / FlightBox distro or update you will need to copy:
+
+1. /usr/sbin/pi-blaster
+1. /lib/systemd/system/pi-blaster.service
+1. /etc/default/pi-blaster
+1. /usr/sbin/boardctl
+1. /lib/systemd/system/boardctl.service
   
