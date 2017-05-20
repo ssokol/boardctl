@@ -59,6 +59,8 @@ type status struct {
 
 var addr = flag.String("addr", "localhost", "http service address")
 
+var chanDone chan bool
+
 var chanPWR chan int
 var chanGPS chan int
 var chanADS chan int
@@ -73,7 +75,7 @@ var pinADS = 5
 func writeCommand(pin int, pwm float32) {
 
 	var cmd = fmt.Sprintf("%d=%.02f\n", pin, pwm)
-	fmt.Println(cmd)
+	//fmt.Println(cmd)
 
 	file, err := os.OpenFile("/dev/pi-blaster", os.O_WRONLY|os.O_TRUNC|os.O_CREATE,0666) // For write access.
 	if err != nil {
@@ -263,6 +265,81 @@ func controlFan() {
 }
 */
 
+func indicateStratuxDown() {
+	writeCommand(pinGPS, 0)
+	writeCommand(pinADS, 0)
+	writeCommand(pinFAN, 1)
+	chanGPS <- 0
+	chanADS <- 0
+	chanPWR <- 1
+}
+
+func listenOnWebsocket() {
+
+	u := url.URL{Scheme: "ws", Host: *addr, Path: "/status"}
+	log.Printf("connecting to %s", u.String())
+
+	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		log.Println("Unable to connect to WebSocket: ", err)
+		indicateStratuxDown()
+		chanDone <- true
+		return
+	}
+	
+	defer c.Close()
+	
+	for {
+		_, message, err := c.ReadMessage()
+		if err != nil {
+			//TODO: if isCloseError isUnexpectedCloseError this daemon should begin reconnect attempt
+			log.Println("WebSocket closed:", err)
+			indicateStratuxDown()
+			chanDone <- true
+			return
+		}
+
+		res := status{}
+		json.Unmarshal([]byte(message), &res)
+
+		// check CPU temperature
+		if (res.CPUTemp >= 50) {
+			writeCommand(pinFAN, 1)
+		} else if (res.CPUTemp >= 40) {
+			writeCommand(pinFAN, 0.5)
+		} else {
+			writeCommand(pinFAN, 1)
+		}
+
+		// check the GPS status
+		if (res.GPS_solution == "Disconnected") {
+			chanGPS <- 0 // off
+		} else
+		if (res.GPS_solution == "No Fix") {
+			chanGPS <- 1 // blink
+		} else {
+			chanGPS <- 2 // solid
+		}
+
+		// check the number of ADS-B messages we're receiving
+		if ((res.UAT_messages_last_minute > 0) && (res.ES_messages_last_minute > 1)) {
+			chanADS <- 2
+		} else
+		if ((res.UAT_messages_last_minute == 0) && (res.ES_messages_last_minute > 1)) {
+			chanADS <- 1
+		} else
+		if ((res.UAT_messages_last_minute > 0) && (res.ES_messages_last_minute <= 1)) {
+			chanADS <- 1
+		} else {
+			chanADS <- 0
+		}
+
+		chanPWR <- 2
+
+	}
+
+}
+
 func main() {
 
 	flag.Parse()
@@ -287,69 +364,11 @@ func main() {
 	chanGPS = make(chan int)
 	chanADS = make(chan int)
 
-	// start listening
-	//go controlFan()
+	// start channels listening for commands
 	go controlPower()
 	go controlGPS()
 	go controlADSB()
 
-	u := url.URL{Scheme: "ws", Host: *addr, Path: "/status"}
-	log.Printf("connecting to %s", u.String())
-
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	if err != nil {
-		log.Fatal("dial:", err)
-	}
-
-	defer c.Close()
-
-	done := make(chan struct{})
-
-	// socket listener function
-	go func() {
-		defer c.Close()
-		defer close(done)
-		for {
-			_, message, err := c.ReadMessage()
-			if err != nil {
-				//TODO: if isCloseError isUnexpectedCloseError this daemon should begin reconnect attempt
-				log.Println("read:", err)
-				return
-			}
-
-			res := status{}
-    		json.Unmarshal([]byte(message), &res)
-
-    		if (res.CPUTemp < 40) {
-    			writeCommand(pinFAN, 0)
-    		} else {
-    			writeCommand(pinFAN, 1)
-    		}
-
-			if (res.GPS_solution == "Disconnected") {
-				chanGPS <- 0 // off
-			} else
-			if (res.GPS_solution == "No Fix") {
-				chanGPS <- 1 // blink
-			} else {
-				chanGPS <- 2 // solid
-			}
-
-			if ((res.UAT_messages_last_minute > 0) && (res.ES_messages_last_minute > 1)) {
-				chanADS <- 2
-			} else
-			if ((res.UAT_messages_last_minute == 0) && (res.ES_messages_last_minute > 1)) {
-				chanADS <- 1
-			} else
-			if ((res.UAT_messages_last_minute > 0) && (res.ES_messages_last_minute <= 1)) {
-				chanADS <- 1
-			} else {
-				chanADS <- 0
-			}
-
-			chanPWR <- 2
-		}
-	}()
 
 	// turn on the LEDs (brightness line)
 	ledsOn()
@@ -369,13 +388,24 @@ func main() {
 	time.Sleep(time.Millisecond * 500)
 	writeCommand(pinLED, 0)
 
-	// turn off individual LED
+	// turn off individual LEDs
 	ledsOff()
 
 	// set the LED master line high (will eventually be PWM)
 	writeCommand(pinLED, 1)
 
+	// create the "socket disconnect" channel
+	chanDone = make(chan bool)
+	defer close(chanDone)
+	
+	go listenOnWebsocket()
 
-
-	select {}
+	for {
+		select {
+		case <- chanDone:
+			log.Printf("Socket disconnected / failed to connect")
+			time.Sleep(time.Second * 1)
+			go listenOnWebsocket()
+		}
+	}
 }
