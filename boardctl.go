@@ -11,6 +11,7 @@ import (
 	"time"
 	"log"
 	"github.com/gorilla/websocket"
+	"github.com/VividCortex/ewma"
 	"encoding/json"
 )
 
@@ -71,6 +72,8 @@ var pinLED = 12
 var pinPWR = 26
 var pinGPS = 6
 var pinADS = 5
+
+var tempAvg = ewma.NewMovingAverage(5)
 
 func writeCommand(pin int, pwm float32) {
 
@@ -303,13 +306,16 @@ func listenOnWebsocket() {
 		json.Unmarshal([]byte(message), &res)
 
 		// check CPU temperature
-		if (res.CPUTemp >= 50) {
+		tempAvg.Add(float64(res.CPUTemp))
+		temp := tempAvg.Value()
+		if (temp >= 50) {
 			writeCommand(pinFAN, 1)
-		} else if (res.CPUTemp >= 40) {
+		} else if (temp >= 40) {
 			writeCommand(pinFAN, 0.5)
 		} else {
 			writeCommand(pinFAN, 1)
 		}
+log.Printf("Temp: %0.2f\n", temp)
 
 		// check the GPS status
 		if (res.GPS_solution == "Disconnected") {
