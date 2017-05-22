@@ -73,6 +73,7 @@ var pinPWR = 26
 var pinGPS = 6
 var pinADS = 5
 
+var fanmode = 0
 var tempAvg = ewma.NewMovingAverage(5)
 
 func writeCommand(pin int, pwm float32) {
@@ -308,14 +309,38 @@ func listenOnWebsocket() {
 		// check CPU temperature
 		tempAvg.Add(float64(res.CPUTemp))
 		temp := tempAvg.Value()
-		if (temp >= 50) {
-			writeCommand(pinFAN, 1)
-		} else if (temp >= 40) {
-			writeCommand(pinFAN, 0.5)
-		} else {
-			writeCommand(pinFAN, 1)
+		if (fanmode == 0) {
+			if (temp >= 40) {
+				fanmode = 1
+				writeCommand(pinFAN, 0.5)
+			} else if (temp >= 50) {
+				fanmode = 2
+				writeCommand(pinFAN, 1)
+			} else {
+				// do nothing - 0 / 0 is good
+			}
+		} else if (fanmode == 1) {
+			if (temp <= 35) {
+				fanmode = 0
+				writeCommand(pinFAN, 0)
+			} else if (temp >= 50) {
+				fanmode = 2
+				writeCommand(pinFAN, 1)
+			} else {
+				// do nothing = 1 / 0.5 is good
+			}
+		} else if (fanmode == 2) {
+			if (temp <= 45) {
+				fanmode = 1
+				writeCommand(pinFAN, 0.5)
+			} else if (temp <= 35) {
+				fanmode = 0
+				writeCommand(pinFAN, 0)
+			} else {
+				// do nothing = 2 / 1 is good
+			}
 		}
-log.Printf("Temp: %0.2f\n", temp)
+		log.Printf("Temp: %0.2f\n", temp)
 
 		// check the GPS status
 		if (res.GPS_solution == "Disconnected") {
