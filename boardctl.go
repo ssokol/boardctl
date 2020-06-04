@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-//	"io/ioutil"
 	"os/signal"
 	"net/url"
 	"time"
@@ -67,6 +66,7 @@ var chanGPS chan int
 var chanADS chan int
 var chanFAN chan int
 
+var pinFAN2 = 18
 var pinFAN = 13
 var pinLED = 12
 var pinPWR = 26
@@ -203,76 +203,11 @@ func controlADSB() {
 	}
 }
 
-/*
-func controlFan() {
-
-	var count = 0
-	var cutoff = 40
-	var units = 40
-
-	for {
-		timeChanF := time.NewTimer(time.Microsecond * 40).C // 25kHz
-		select {
-		case speed := <-chanFAN:
-			if (speed < 0) {
-				return
-			} else {
-				var f float32 = (float32(speed) / 100)
-				cutoff = int(f * 40)
-			}
-			fmt.Println("cutoff: ", speed, cutoff)
-		case <- timeChanF:
-			if (count < cutoff) {
-				fan.High()
-			} else {
-				fan.Low()
-			}
-			count = count + 1
-			if (count > (units - 1)) {
-				count = 0
-			}
-		}
-	}
-}
-
-func controlFan() {
-        for {
-
-                // Set up tickers for 60% PWM @ 1 kHz.
-
-                onChanF := time.NewTicker(time.Millisecond * 1).C
-                time.Sleep(600 * time.Microsecond)
-                offChanF := time.NewTicker(time.Millisecond * 1).C
-
-
-                select {
-                case speed := <-chanFAN:
-                        var cutoff int
-                        if (speed < 0) {
-                                return
-                        } else {
-                                var f float32 = (float32(speed) / 100)
-                                cutoff = int(f * 1000)
-                        }
-                        fmt.Println("fancutoff: ", speed, cutoff)
-
-                        onChanF = time.NewTicker(time.Millisecond * 1).C
-                        time.Sleep(time.Duration(cutoff) * time.Microsecond)
-                        offChanF = time.NewTicker(time.Millisecond * 1).C
-
-                case <- onChanF:
-                        fan.High()
-                case <- offChanF:
-                        fan.Low()
-                }
-        }
-}
-*/
-
 func indicateStratuxDown() {
 	writeCommand(pinGPS, 0)
 	writeCommand(pinADS, 0)
 	writeCommand(pinFAN, 1)
+	writeCommand(pinFAN2, 1)
 	chanGPS <- 0
 	chanADS <- 0
 	chanPWR <- 1
@@ -313,9 +248,11 @@ func listenOnWebsocket() {
 			if (temp >= 40) {
 				fanmode = 1
 				writeCommand(pinFAN, 0.5)
+				writeCommand(pinFAN2, 0.5)
 			} else if (temp >= 50) {
 				fanmode = 2
 				writeCommand(pinFAN, 1)
+				writeCommand(pinFAN2, 1)
 			} else {
 				// do nothing - 0 / 0 is good
 			}
@@ -323,9 +260,11 @@ func listenOnWebsocket() {
 			if (temp <= 35) {
 				fanmode = 0
 				writeCommand(pinFAN, 0)
+				writeCommand(pinFAN2, 0)
 			} else if (temp >= 50) {
 				fanmode = 2
 				writeCommand(pinFAN, 1)
+				writeCommand(pinFAN2, 1)
 			} else {
 				// do nothing = 1 / 0.5 is good
 			}
@@ -333,14 +272,16 @@ func listenOnWebsocket() {
 			if (temp <= 45) {
 				fanmode = 1
 				writeCommand(pinFAN, 0.5)
+				writeCommand(pinFAN2, 0.5)
 			} else if (temp <= 35) {
 				fanmode = 0
 				writeCommand(pinFAN, 0)
+				writeCommand(pinFAN2, 0)
 			} else {
 				// do nothing = 2 / 1 is good
 			}
 		}
-		log.Printf("Temp: %0.2f\n", temp)
+		log.Printf("Temp: %0.2f - Mode: %d\n", temp, fanmode)
 
 		// check the GPS status
 		if (res.GPS_solution == "Disconnected") {
@@ -386,6 +327,7 @@ func main() {
 			chanADS <- -1
 			ledsOff()
 			writeCommand(pinFAN, 0)
+			writeCommand(pinFAN2, 0)
 			os.Exit(1)
 		}
 	}()
@@ -406,6 +348,7 @@ func main() {
 
 	// turn off the fan
 	writeCommand(pinFAN, 0)
+	writeCommand(pinFAN2, 0)
 
 	// flash the startup sequence
 	time.Sleep(time.Millisecond * 500)
