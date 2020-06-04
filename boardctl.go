@@ -249,36 +249,45 @@ func listenOnWebsocket() {
 				fanmode = 1
 				writeCommand(pinFAN, 0.5)
 				writeCommand(pinFAN2, 0.5)
-			} else if (temp >= 50) {
+				log.Printf("Fan to 0.5\n")
+			} else if (temp >= 60) {
 				fanmode = 2
 				writeCommand(pinFAN, 1)
 				writeCommand(pinFAN2, 1)
+				log.Printf("Fan to 1.0\n")
 			} else {
 				// do nothing - 0 / 0 is good
+				log.Printf("Fan holding at level 0\n")
 			}
 		} else if (fanmode == 1) {
-			if (temp <= 35) {
+			if (temp < 35) {
 				fanmode = 0
 				writeCommand(pinFAN, 0)
 				writeCommand(pinFAN2, 0)
-			} else if (temp >= 50) {
+				log.Printf("Fan to 0.0\n")
+			} else if (temp >= 60) {
 				fanmode = 2
 				writeCommand(pinFAN, 1)
 				writeCommand(pinFAN2, 1)
+				log.Printf("Fan to 1.0\n")
 			} else {
 				// do nothing = 1 / 0.5 is good
+				log.Printf("Fan holding at level 1\n")
 			}
 		} else if (fanmode == 2) {
-			if (temp <= 45) {
+			if (temp < 35) {
+				fanmode = 0
+				writeCommand(pinFAN, 0)
+				writeCommand(pinFAN2, 0)
+				log.Printf("Fan to 0.0\n")
+			} else if (temp < 55) {
 				fanmode = 1
 				writeCommand(pinFAN, 0.5)
 				writeCommand(pinFAN2, 0.5)
-			} else if (temp <= 35) {
-				fanmode = 0
-				writeCommand(pinFAN, 0)
-				writeCommand(pinFAN2, 0)
+				log.Printf("Fan to 0.5\n")
 			} else {
 				// do nothing = 2 / 1 is good
+				log.Printf("Fan holding at level 2\n")
 			}
 		}
 		log.Printf("Temp: %0.2f - Mode: %d\n", temp, fanmode)
