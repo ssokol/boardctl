@@ -2,6 +2,7 @@
 *.o
 *.a
 *.so
+boardctl
 
 # Folders
 _obj
